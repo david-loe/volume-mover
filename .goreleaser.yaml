@@ -26,17 +26,6 @@ archives:
 checksum:
   name_template: checksums.txt
 
-dockers:
-  - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/volume-mover:{{ .Version }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/volume-mover:latest"
-      - "docker.io/{{ .Env.DOCKERHUB_USERNAME }}/volume-mover:{{ .Version }}"
-      - "docker.io/{{ .Env.DOCKERHUB_USERNAME }}/volume-mover:latest"
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64,linux/arm64"
-
 release:
   github:
     owner: david-loe
