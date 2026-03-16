@@ -57,8 +57,27 @@ input:not([type="checkbox"]):not([type="radio"]), select { width: 100%; padding:
 input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--accent); }
 .table-wrap { overflow: auto; }
 .data-table { width: 100%; border-collapse: collapse; }
+.data-table.is-loading { pointer-events: none; }
 .data-table th, .data-table td { padding: 14px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .data-table th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.skeleton-row td { padding-top: 16px; padding-bottom: 16px; }
+.skeleton-block {
+  display: inline-flex;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.06), rgba(15, 118, 110, 0.14), rgba(15, 23, 42, 0.06));
+  background-size: 220% 100%;
+  animation: volume-skeleton-shift 1.2s ease-in-out infinite;
+}
+.skeleton-check { width: 18px; height: 18px; border-radius: 5px; }
+.skeleton-text { height: 14px; }
+.skeleton-text.long { width: min(240px, 72%); }
+.skeleton-text.short { width: min(110px, 48%); }
+.skeleton-pill { width: 42px; height: 14px; }
+.skeleton-link { width: 56px; height: 14px; }
+@keyframes volume-skeleton-shift {
+  0% { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
 .status-pill { display: inline-flex; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .status-queued { background: #e0f2fe; color: #075985; }
 .status-validating, .status-running { background: #dcfce7; color: #166534; }

@@ -8,6 +8,7 @@ export function VolumesPage() {
   const navigate = useNavigate()
   const [hosts, setHosts] = useState<HostConfig[]>([])
   const [volumes, setVolumes] = useState<VolumeSummary[]>([])
+  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string[]>(searchParams.getAll('volume'))
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string>()
@@ -19,7 +20,28 @@ export function VolumesPage() {
   }, [])
 
   useEffect(() => {
-    api.volumes(host, hideAnonymous).then((data) => setVolumes(data.volumes)).catch((err) => setError(err instanceof Error ? err.message : 'Failed to load volumes'))
+    let cancelled = false
+    setLoading(true)
+    setError(undefined)
+
+    api.volumes(host, hideAnonymous)
+      .then((data) => {
+        if (cancelled) return
+        setVolumes(data.volumes)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setVolumes([])
+        setError(err instanceof Error ? err.message : 'Failed to load volumes')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [host, hideAnonymous])
 
   const filtered = useMemo(() => volumes.filter((volume) => volume.name.toLowerCase().includes(search.toLowerCase())), [volumes, search])
@@ -52,10 +74,19 @@ export function VolumesPage() {
           </div>
         )}
         <div className="table-wrap">
-          <table className="data-table">
+          <table className={`data-table${loading ? ' is-loading' : ''}`}>
             <thead><tr><th></th><th>Name</th><th>Driver</th><th>Attached</th><th>Running</th><th>Open</th></tr></thead>
             <tbody>
-              {filtered.map((volume) => (
+              {loading ? Array.from({ length: 6 }, (_, index) => (
+                <tr key={`loading-${index}`} className="skeleton-row" aria-hidden="true">
+                  <td><span className="skeleton-block skeleton-check" /></td>
+                  <td><span className="skeleton-block skeleton-text long" /></td>
+                  <td><span className="skeleton-block skeleton-text short" /></td>
+                  <td><span className="skeleton-block skeleton-pill" /></td>
+                  <td><span className="skeleton-block skeleton-pill" /></td>
+                  <td><span className="skeleton-block skeleton-link" /></td>
+                </tr>
+              )) : filtered.map((volume) => (
                 <tr key={volume.name}>
                   <td><input type="checkbox" checked={selected.includes(volume.name)} onChange={() => toggleSelected(volume.name)} /></td>
                   <td>{volume.name}</td>
