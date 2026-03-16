@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/david-loe/volume-mover/internal/model"
@@ -22,7 +24,11 @@ func NewRunner() Runner {
 }
 
 func (c *CommandBuilder) Run(ctx context.Context, host model.HostConfig, command string) (string, error) {
-	cmd := c.command(ctx, host, command)
+	cmd, cleanup, err := c.command(ctx, host, command)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("run command on %s: %w: %s", host.Name, err, strings.TrimSpace(string(output)))
@@ -31,8 +37,16 @@ func (c *CommandBuilder) Run(ctx context.Context, host model.HostConfig, command
 }
 
 func (c *CommandBuilder) Pipe(ctx context.Context, srcHost model.HostConfig, srcCommand string, dstHost model.HostConfig, dstCommand string) error {
-	src := c.command(ctx, srcHost, srcCommand)
-	dst := c.command(ctx, dstHost, dstCommand)
+	src, srcCleanup, err := c.command(ctx, srcHost, srcCommand)
+	if err != nil {
+		return err
+	}
+	defer srcCleanup()
+	dst, dstCleanup, err := c.command(ctx, dstHost, dstCommand)
+	if err != nil {
+		return err
+	}
+	defer dstCleanup()
 
 	stdout, err := src.StdoutPipe()
 	if err != nil {
@@ -63,29 +77,79 @@ func (c *CommandBuilder) Pipe(ctx context.Context, srcHost model.HostConfig, src
 	return nil
 }
 
-func (c *CommandBuilder) command(ctx context.Context, host model.HostConfig, command string) *exec.Cmd {
+func (c *CommandBuilder) command(ctx context.Context, host model.HostConfig, command string) (*exec.Cmd, func(), error) {
 	if host.Kind == model.HostKindSSH {
-		args := []string{"-o", "BatchMode=yes"}
+		configPath, cleanup, err := sanitizedSSHConfig()
+		if err != nil {
+			return nil, nil, err
+		}
+		args := []string{"-F", configPath, "-o", "BatchMode=yes"}
 		if host.Port > 0 {
 			args = append(args, "-p", fmt.Sprintf("%d", host.Port))
 		}
 		if host.IdentityFile != "" {
 			args = append(args, "-i", host.IdentityFile)
 		}
-		target := host.Alias
-		if target == "" {
-			target = host.Host
-			if host.User != "" {
-				target = host.User + "@" + target
+		target := host.Host
+		if host.Imported && host.Alias != "" {
+			target = host.Alias
+			if host.Host != "" && host.Host != host.Alias {
+				args = append(args, "-o", "HostKeyAlias="+host.Host)
 			}
+		} else if target == "" {
+			target = host.Alias
+		}
+		if host.User != "" {
+			target = host.User + "@" + target
 		}
 		remote := "sh -lc " + Quote(command)
 		args = append(args, target, remote)
-		return exec.CommandContext(ctx, "ssh", args...)
+		return exec.CommandContext(ctx, "ssh", args...), cleanup, nil
 	}
-	return exec.CommandContext(ctx, "bash", "-lc", command)
+	return exec.CommandContext(ctx, "bash", "-lc", command), func() {}, nil
 }
 
 func Quote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+var sshConfigPath = defaultSSHConfigPath()
+
+func defaultSSHConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join("/root", ".ssh", "config")
+	}
+	return filepath.Join(home, ".ssh", "config")
+}
+
+func sanitizedSSHConfig() (string, func(), error) {
+	content, err := os.ReadFile(sshConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "/dev/null", func() {}, nil
+		}
+		return "", nil, fmt.Errorf("read ssh config: %w", err)
+	}
+	file, err := os.CreateTemp("", "volume-mover-ssh-*.config")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp ssh config: %w", err)
+	}
+	if _, err := file.Write(content); err != nil {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+		return "", nil, fmt.Errorf("write temp ssh config: %w", err)
+	}
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+		return "", nil, fmt.Errorf("chmod temp ssh config: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(file.Name())
+		return "", nil, fmt.Errorf("close temp ssh config: %w", err)
+	}
+	return file.Name(), func() {
+		_ = os.Remove(file.Name())
+	}, nil
 }

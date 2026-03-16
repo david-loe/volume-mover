@@ -101,6 +101,8 @@ volumes:
   - ${HOME}/.ssh:/root/.ssh:ro
 ```
 
+The app reads `/root/.ssh/config` directly when you use `Import SSH config`. Runtime SSH commands also use that file through a temporary sanitized copy with `0600` permissions. Imported hosts still connect by alias, and the app uses the imported host value for host-key matching when needed. Imported runtime support is still limited to the fields the app stores: `Host`, `HostName`, `User`, `Port`, and `IdentityFile`.
+
 Important:
 
 - Mounting the Docker socket effectively gives the container admin-level control over the local Docker engine.
