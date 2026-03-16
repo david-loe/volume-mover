@@ -1,0 +1,43 @@
+version: 2
+project_name: volume-mover
+
+before:
+  hooks:
+    - npm --prefix webapp ci
+    - npm --prefix webapp run build
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: volume-mover
+    main: ./cmd/volume-mover
+    binary: volume-mover
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/volume-mover:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/volume-mover:latest"
+      - "docker.io/{{ .Env.DOCKERHUB_USERNAME }}/volume-mover:{{ .Version }}"
+      - "docker.io/{{ .Env.DOCKERHUB_USERNAME }}/volume-mover:latest"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64,linux/arm64"
+
+release:
+  github:
+    owner: david-loe
+    name: volume-mover

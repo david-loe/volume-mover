@@ -1,0 +1,19 @@
+services:
+  volume-mover:
+    image: ghcr.io/david-loe/volume-mover:latest
+    container_name: volume-mover
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      VOLUME_MOVER_WEB_USERNAME: ${VOLUME_MOVER_WEB_USERNAME:-admin}
+      VOLUME_MOVER_WEB_PASSWORD: ${VOLUME_MOVER_WEB_PASSWORD:-change-me}
+      VOLUME_MOVER_HELPER_IMAGE: ${VOLUME_MOVER_HELPER_IMAGE:-busybox:1.36}
+    volumes:
+      - volume_mover_data:/root/.config/volume-mover
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Optional for SSH-host imports and remote Docker access:
+      # - ${HOME}/.ssh:/root/.ssh:ro
+
+volumes:
+  volume_mover_data:
